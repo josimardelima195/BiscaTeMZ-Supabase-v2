@@ -31,3 +31,11 @@ Depois de publicar os ficheiros no repositório, aguarde o novo deploy da Vercel
 ## Estatísticas por área
 
 A página inicial agora conta apenas os prestadores aprovados que já existem no Supabase e agrupa-os pelo campo de profissão/categoria. A secção **Profissionais por área** atualiza-se automaticamente quando o site recarrega os prestadores aprovados. Quando ainda não existem prestadores aprovados, aparece uma mensagem explicativa em vez de números inventados.
+
+## Recursos adicionais desta versão
+
+A página inicial ganhou pesquisa por nome, profissão e localização, navegação inferior no telemóvel, estatísticas por profissão e uma lista maior de categorias profissionais.
+
+O painel `/admin` ganhou o botão **Criar 3 demonstrações**. Este botão cria três prestadores pendentes no Supabase, sem documentos reais, para testar o fluxo. Depois da criação, as credenciais temporárias aparecem apenas no próprio painel administrativo; não são gravadas no código. Os prestadores podem ser aprovados no painel e passam a aparecer nas estatísticas e nos cartões públicos.
+
+As demonstrações usam os e-mails `demo.electricista@biscatemz.com`, `demo.psicologo@biscatemz.com` e `demo.costureira@biscatemz.com`, com uma palavra-passe temporária mostrada pelo admin no momento da criação. Não reutilize estas palavras-passe em produção.
