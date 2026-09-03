@@ -1,0 +1,2 @@
+import { adminSupabase,currentUser } from "@/lib/supabase-server";
+export async function POST(request:Request){const u=await currentUser(request);if(!u)return Response.json({error:"Entre para registar um alerta SOS."},{status:401});const b=await request.json();await adminSupabase().from("sos_alerts").insert({owner_id:u.id,latitude:b.latitude??null,longitude:b.longitude??null,note:String(b.note??"Alerta SOS BiscaTeMZ").slice(0,500)});return Response.json({ok:true});}
