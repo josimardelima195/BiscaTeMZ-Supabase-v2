@@ -39,3 +39,11 @@ A página inicial ganhou pesquisa por nome, profissão e localização, navegaç
 O painel `/admin` ganhou o botão **Criar 3 demonstrações**. Este botão cria três prestadores pendentes no Supabase, sem documentos reais, para testar o fluxo. Depois da criação, as credenciais temporárias aparecem apenas no próprio painel administrativo; não são gravadas no código. Os prestadores podem ser aprovados no painel e passam a aparecer nas estatísticas e nos cartões públicos.
 
 As demonstrações usam os e-mails `demo.electricista@biscatemz.com`, `demo.psicologo@biscatemz.com` e `demo.costureira@biscatemz.com`, com uma palavra-passe temporária mostrada pelo admin no momento da criação. Não reutilize estas palavras-passe em produção.
+
+## Localização, imagem e rodapé
+
+Esta versão inclui localização opcional no cadastro de prestador e na pesquisa. O navegador pede permissão antes de usar o GPS. A aplicação guarda apenas coordenadas opcionais para ordenar profissionais por proximidade e mostra ao cliente uma distância aproximada em quilómetros; o endereço exato não é mostrado.
+
+Antes de publicar, execute `supabase/migrations/20260903_location.sql` no SQL Editor do mesmo projeto Supabase. Esta migração acrescenta `latitude` e `longitude` opcionais em `provider_profiles` e não elimina dados existentes.
+
+A imagem `public/workers-cutout.png` foi preparada como recorte transparente para o hero. O rodapé contém suporte, direitos de autor, privacidade e data de 2026. A página legal fica em `/direitos-autor`.
