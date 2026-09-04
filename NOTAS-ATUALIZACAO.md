@@ -51,3 +51,11 @@ A imagem `public/workers-cutout.png` foi preparada como recorte transparente par
 ## Correções recentes
 
 A navegação móvel agora tem espaço próprio e não cobre modais ou mensagens. O formulário de prestador mostra progresso Dados/Documentos, inclui todas as províncias de Moçambique, valida telefone com 9 dígitos e apresenta localização opcional. O painel admin tem abas e contadores. O rodapé inclui suporte, privacidade, direitos de autor e links sociais. Em caso de falha no cadastro, a mensagem identifica a etapa sem expor segredos.
+
+## Upload, alertas e pagamentos futuros
+
+O cadastro agora valida tamanhos localmente, mostra etapas, aborta depois de 90 segundos e devolve mensagens de erro por etapa. O servidor guarda documentos em paralelo para reduzir o tempo de espera.
+
+O rodapé usa ícones SVG inline para Instagram, Facebook, WhatsApp e TikTok. A conta inclui o botão para pedir permissão de alertas do navegador; alertas push reais com a aplicação fechada exigirão posteriormente service worker, configuração de push e consentimento do utilizador.
+
+A migração `20260904_payments_future.sql` prepara a tabela de pagamentos com taxa configurável de 7%, vencimento em 48 horas e estados de pagamento. Ela não liga M-Pesa, e-Mola, mKesh ou cartões e não movimenta dinheiro. A integração real deve ser feita depois de obter contas comerciais, credenciais, sandbox, webhooks e aprovação dos provedores.
