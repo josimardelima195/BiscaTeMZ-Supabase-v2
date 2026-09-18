@@ -3,8 +3,10 @@ import { adminSupabase, currentUser } from "@/lib/supabase-server";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUser(request); const { id } = await params;
   if (!user) return Response.json({ error: "Não autorizado" }, { status: 401 });
-  const db = adminSupabase(); const { data: row } = await db.from("service_requests").select().eq("id", id).single();
-  if (!row || row.provider_id !== user.id || !["accepted", "scheduled"].includes(row.status)) return Response.json({ error: "Este pedido não pode ser concluído." }, { status: 403 });
+  const db = adminSupabase(); const { data: role } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (role?.role !== "admin") return Response.json({ error: "A conclusão da prestação é feita apenas pela administração." }, { status: 403 });
+  const { data: row } = await db.from("service_requests").select().eq("id", id).single();
+  if (!row || !["accepted", "scheduled"].includes(row.status)) return Response.json({ error: "Este pedido não pode ser concluído." }, { status: 403 });
   const { data: payment } = await db.from("service_payments").select("status,payout_status").eq("request_id", id).maybeSingle();
   if (!payment || !["paid", "authorized"].includes(payment.status)) return Response.json({ error: "O serviço só pode ser concluído depois da confirmação do pagamento pelo administrador." }, { status: 409 });
   const updated = await db.from("service_requests").update({ status: "completed" }).eq("id", id);
