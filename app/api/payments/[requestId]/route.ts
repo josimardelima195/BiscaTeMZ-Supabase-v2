@@ -3,9 +3,10 @@ import { adminSupabase, currentUser } from "@/lib/supabase-server";
 export async function GET(request: Request, { params }: { params: Promise<{ requestId: string }> }) {
   const user = await currentUser(request); const { requestId } = await params;
   if (!user) return Response.json({ error: "Entre na sua conta." }, { status: 401 });
-  const db = adminSupabase(); const { data: row } = await db.from("service_payments").select("*").eq("request_id", requestId).maybeSingle();
-  if (!row || (row.payer_id !== user.id && row.provider_id !== user.id)) return Response.json({ error: "Pagamento não encontrado." }, { status: 404 });
-  return Response.json({ payment: row, payment_phone: "868787572", commission_percent: 7, provider_percent: 93 });
+  const db = adminSupabase(); const { data: requestRow } = await db.from("service_requests").select("id,client_id,provider_id,status").eq("id", requestId).maybeSingle();
+  if (!requestRow || (requestRow.client_id !== user.id && requestRow.provider_id !== user.id)) return Response.json({ error: "Pagamento não encontrado." }, { status: 404 });
+  const [{ data: row }, { data: provider }] = await Promise.all([db.from("service_payments").select("*").eq("request_id", requestId).maybeSingle(), db.from("provider_profiles").select("starting_price").eq("id", requestRow.provider_id).maybeSingle()]);
+  return Response.json({ payment: row, suggested_amount: provider?.starting_price ?? null, payment_phone: "868787572", commission_percent: 7, provider_percent: 93 });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ requestId: string }> }) {
