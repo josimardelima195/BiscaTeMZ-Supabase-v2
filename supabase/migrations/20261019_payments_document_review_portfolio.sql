@@ -1,0 +1,32 @@
+-- Migração aplicada no projeto Supabase ydrabwxdzxqwcpzpvinf.
+-- Pagamentos manuais, revisão preliminar de documentos e portfólio de trabalhos.
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN CREATE TYPE public.payment_status AS ENUM ('pending','authorized','paid','failed','refunded','cancelled'); END IF; END $$;
+CREATE TABLE IF NOT EXISTS public.service_payments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), request_id uuid NOT NULL UNIQUE REFERENCES public.service_requests(id) ON DELETE CASCADE, payer_id uuid NOT NULL REFERENCES public.profiles(id), provider_id uuid NOT NULL REFERENCES public.profiles(id), gross_amount numeric(12,2) NOT NULL CHECK (gross_amount > 0), platform_fee_percent numeric(5,2) NOT NULL DEFAULT 7 CHECK (platform_fee_percent BETWEEN 0 AND 100), platform_fee_amount numeric(12,2) NOT NULL DEFAULT 0 CHECK (platform_fee_amount >= 0), provider_amount numeric(12,2) NOT NULL DEFAULT 0 CHECK (provider_amount >= 0), currency text NOT NULL DEFAULT 'MZN', provider text, external_reference text, status public.payment_status NOT NULL DEFAULT 'pending', due_at timestamptz, paid_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), payment_phone text NOT NULL DEFAULT '868787572', proof_storage_path text, proof_file_name text, proof_uploaded_at timestamptz, confirmed_by uuid REFERENCES public.profiles(id), confirmed_at timestamptz, payout_status text NOT NULL DEFAULT 'not_started', payout_reference text, payout_sent_at timestamptz, payment_deadline_at timestamptz);
+ALTER TABLE public.service_payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "payment participants or admin" ON public.service_payments;
+CREATE POLICY "payment participants or admin" ON public.service_payments FOR SELECT USING (payer_id = auth.uid() OR provider_id = auth.uid() OR public.is_admin());
+DROP POLICY IF EXISTS "payment participants insert" ON public.service_payments;
+CREATE POLICY "payment participants insert" ON public.service_payments FOR INSERT WITH CHECK (payer_id = auth.uid() OR public.is_admin());
+CREATE INDEX IF NOT EXISTS service_payments_status_idx ON public.service_payments(status, payment_deadline_at);
+ALTER TABLE public.provider_documents ADD COLUMN IF NOT EXISTS automated_status text;
+ALTER TABLE public.provider_documents ADD COLUMN IF NOT EXISTS automated_score numeric(5,2);
+ALTER TABLE public.provider_documents ADD COLUMN IF NOT EXISTS automated_notes text;
+ALTER TABLE public.provider_documents ADD COLUMN IF NOT EXISTS analyzed_at timestamptz;
+UPDATE public.provider_documents SET automated_status = 'manual_review' WHERE automated_status IS NULL OR automated_status NOT IN ('pending','pass','review','fail');
+ALTER TABLE public.provider_documents ALTER COLUMN automated_status SET DEFAULT 'manual_review';
+ALTER TABLE public.provider_documents ALTER COLUMN automated_status SET NOT NULL;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='provider_documents_automated_status_check') THEN ALTER TABLE public.provider_documents ADD CONSTRAINT provider_documents_automated_status_check CHECK (automated_status IN ('pending','pass','review','fail','manual_review')); END IF; END $$;
+CREATE TABLE IF NOT EXISTS public.provider_portfolio (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), provider_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE, storage_path text NOT NULL UNIQUE, file_name text NOT NULL, caption text, created_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE public.provider_portfolio ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "portfolio public read" ON public.provider_portfolio;
+CREATE POLICY "portfolio public read" ON public.provider_portfolio FOR SELECT USING (true);
+DROP POLICY IF EXISTS "portfolio owner write" ON public.provider_portfolio;
+CREATE POLICY "portfolio owner write" ON public.provider_portfolio FOR ALL USING (provider_id = auth.uid() OR public.is_admin()) WITH CHECK (provider_id = auth.uid() OR public.is_admin());
+INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types) VALUES ('provider-portfolio','provider-portfolio',true,8388608,ARRAY['image/jpeg','image/png','image/webp']) ON CONFLICT(id) DO NOTHING;
+DROP POLICY IF EXISTS "public provider portfolio images" ON storage.objects;
+CREATE POLICY "public provider portfolio images" ON storage.objects FOR SELECT USING (bucket_id='provider-portfolio');
+CREATE INDEX IF NOT EXISTS provider_documents_status_idx ON public.provider_documents(provider_id,status,automated_status);
+CREATE TABLE IF NOT EXISTS public.admin_access_logs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), admin_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE, resource_type text NOT NULL, resource_id uuid, action text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE public.admin_access_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "admins read access logs" ON public.admin_access_logs;
+CREATE POLICY "admins read access logs" ON public.admin_access_logs FOR SELECT USING (public.is_admin());

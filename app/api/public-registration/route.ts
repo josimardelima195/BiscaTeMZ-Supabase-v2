@@ -1,5 +1,11 @@
 import { adminSupabase } from "@/lib/supabase-server";
 const docKinds = new Set(["bi_front","bi_back","certificate","licence","nuit","criminal_record"]);
+function preliminaryReview(file: File, kind: string) {
+  const isSupported = file.type.startsWith("image/") || file.type === "application/pdf";
+  if (!isSupported || file.size < 12 * 1024) return { status: "fail", score: 0, notes: "Ficheiro vazio, demasiado pequeno ou formato não suportado." };
+  if (kind === "bi_front" || kind === "bi_back") return { status: "review", score: 60, notes: "Imagem recebida. Frente e verso serão comparados e a autenticidade deve ser confirmada pelo administrador; elementos visuais isolados não provam autenticidade." };
+  return { status: "pass", score: 80, notes: "Ficheiro recebido e legível para revisão administrativa." };
+}
 export async function POST(request: Request) {
   let userId: string | null = null; let stage = "início";
   try {
@@ -16,7 +22,7 @@ export async function POST(request: Request) {
     const {data:photoUrl}=db.storage.from("profile-photos").getPublicUrl(photoPath);
     stage = "guardar perfil"; const {error:profileError}=await db.from("profiles").insert({id,full_name:data.name.slice(0,120),phone:`+258${data.phone.replace(/\D/g,"").slice(-9)}`,photo_url:photoUrl.publicUrl,role:"provider",city:data.province}); if(profileError) throw profileError;
     stage = "guardar dados profissionais"; const latitude=Number(data.latitude),longitude=Number(data.longitude); const safeLat=Number.isFinite(latitude)&&latitude>=-90&&latitude<=90?latitude:null; const safeLng=Number.isFinite(longitude)&&longitude>=-180&&longitude<=180?longitude:null; const {error:providerError}=await db.from("provider_profiles").insert({id,category:data.category.slice(0,80),bio:data.bio.slice(0,1200),province:data.province.slice(0,80),district:data.district.slice(0,120),starting_price:Number(data.price||0),years_experience:Number(data.experience||0),latitude:safeLat,longitude:safeLng}); if(providerError) throw providerError;
-    stage = "guardar documentos"; await Promise.all(docs.map(async(file,i)=>{const kind=types[i];if(!docKinds.has(kind))return;const path=`${id}/${kind}/${crypto.randomUUID()}`;const up=await db.storage.from("private-documents").upload(path,file,{contentType:file.type,upsert:false});if(up.error)throw up.error;const row=await db.from("provider_documents").insert({provider_id:id,kind,storage_path:path,file_name:file.name.slice(0,180)});if(row.error)throw row.error;}));
-    return Response.json({ok:true,message:"Cadastro enviado. Depois de aprovado, receberá acesso ao perfil profissional."});
+    stage = "guardar documentos"; await Promise.all(docs.map(async(file,i)=>{const kind=types[i];if(!docKinds.has(kind))return;const path=`${id}/${kind}/${crypto.randomUUID()}`;const up=await db.storage.from("private-documents").upload(path,file,{contentType:file.type,upsert:false});if(up.error)throw up.error;const triage=preliminaryReview(file,kind);const row=await db.from("provider_documents").insert({provider_id:id,kind,storage_path:path,file_name:file.name.slice(0,180),automated_status:triage.status,automated_score:triage.score,automated_notes:triage.notes,analyzed_at:new Date().toISOString()});if(row.error)throw row.error;}));
+    return Response.json({ok:true,message:"Cadastro enviado. Os documentos foram guardados com segurança e entram em revisão automática preliminar e validação administrativa."});
   } catch (error) { console.error("public-registration failed",{stage,error}); if(userId) await adminSupabase().auth.admin.deleteUser(userId); return Response.json({error:`Não foi possível guardar o cadastro na etapa: ${stage}. Verifique a configuração do Supabase e tente novamente.`},{status:500}); }
 }

@@ -9,7 +9,8 @@ export async function GET(request: Request) {
     db.from("provider_profiles").select("category,bio,province,district,latitude,longitude,starting_price,years_experience,verification").eq("id", user.id).maybeSingle(),
   ]);
   if (profile.error) return Response.json({ error: "Não foi possível carregar a conta." }, { status: 500 });
-  return Response.json({ profile: profile.data, provider: provider.data ?? null });
+  const portfolio = await db.from("provider_portfolio").select("id,file_name,caption,storage_path,created_at").eq("provider_id", user.id).order("created_at", { ascending: false });
+  return Response.json({ profile: profile.data, provider: provider.data ?? null, portfolio: (portfolio.data ?? []).map(item => ({ ...item, url: db.storage.from("provider-portfolio").getPublicUrl(item.storage_path).data.publicUrl })) });
 }
 
 export async function PATCH(request: Request) {
