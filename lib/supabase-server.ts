@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "");
 const secret = process.env.SUPABASE_SECRET_KEY!;
 
 export const adminSupabase = () => createClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } });

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co").replace(/\/rest\/v1\/?$/, "");
 const publishable = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_placeholder";
 function browserStorage(){
   if(typeof window === "undefined") return undefined;
