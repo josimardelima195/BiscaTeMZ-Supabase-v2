@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const db = adminSupabase();
   const [profile, provider] = await Promise.all([
     db.from("profiles").select("id,full_name,phone,photo_url,role,city").eq("id", user.id).maybeSingle(),
-    db.from("provider_profiles").select("category,bio,province,district,latitude,longitude,starting_price,years_experience,verification").eq("id", user.id).maybeSingle(),
+    db.from("provider_profiles").select("category,bio,services_offered,province,district,latitude,longitude,starting_price,years_experience,verification,available,working_hours,availability_note").eq("id", user.id).maybeSingle(),
   ]);
   if (profile.error) return Response.json({ error: "Não foi possível carregar a conta." }, { status: 500 });
   const portfolio = await db.from("provider_portfolio").select("id,file_name,caption,storage_path,created_at").eq("provider_id", user.id).order("created_at", { ascending: false });
@@ -49,9 +49,9 @@ export async function PATCH(request: Request) {
     if (updated.error) return Response.json({ error: "Não foi possível atualizar os dados da conta." }, { status: 500 });
   }
 
-  const providerKeys = ["category", "bio", "province", "district", "latitude", "longitude", "starting_price", "years_experience"];
+  const providerKeys = ["category", "bio", "services_offered", "province", "district", "latitude", "longitude", "starting_price", "years_experience", "working_hours", "availability_note", "available"];
   const providerUpdate: Record<string, unknown> = {};
-  for (const key of providerKeys) if (body[key] !== undefined && body[key] !== "") providerUpdate[key] = ["latitude", "longitude", "starting_price"].includes(key) ? Number(body[key]) : ["years_experience"].includes(key) ? Number(body[key]) : String(body[key]).trim();
+  for (const key of providerKeys) if (body[key] !== undefined && body[key] !== "") providerUpdate[key] = ["latitude", "longitude", "starting_price"].includes(key) ? Number(body[key]) : ["years_experience"].includes(key) ? Number(body[key]) : key === "available" ? body[key] === "true" : String(body[key]).trim();
   if (Object.keys(providerUpdate).length) {
     const updated = await db.from("provider_profiles").update(providerUpdate).eq("id", user.id);
     if (updated.error) return Response.json({ error: "Não foi possível atualizar os dados profissionais." }, { status: 500 });
