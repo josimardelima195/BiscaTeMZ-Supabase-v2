@@ -2,12 +2,13 @@ import { adminSupabase } from "@/lib/supabase-server";
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json();
-    if (!name || String(name).trim().length < 3 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email ?? "")) || String(password ?? "").length < 6) return Response.json({ error: "Indique um nome com pelo menos 3 caracteres, um e-mail válido e uma palavra-passe de pelo menos 6 caracteres." }, { status: 400 });
+    const { name, phone, email, password } = await request.json();
+    const normalizedPhone = String(phone ?? "").replace(/\D/g, "");
+    if (!name || String(name).trim().length < 3 || !/^\d{9}$/.test(normalizedPhone) || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email ?? "")) || String(password ?? "").length < 6) return Response.json({ error: "Indique nome, telefone moçambicano com 9 dígitos, e-mail válido e palavra-passe de pelo menos 6 caracteres." }, { status: 400 });
     const db = adminSupabase();
     const created = await db.auth.admin.createUser({ email: String(email).trim().toLowerCase(), password: String(password), email_confirm: true, user_metadata: { full_name: String(name).trim().slice(0, 120), role: "client" } });
     if (created.error || !created.data.user) return Response.json({ error: created.error?.message ?? "Não foi possível criar a conta." }, { status: 409 });
-    const { error } = await db.from("profiles").insert({ id: created.data.user.id, full_name: String(name).trim().slice(0, 120), role: "client" });
+    const { error } = await db.from("profiles").insert({ id: created.data.user.id, full_name: String(name).trim().slice(0, 120), phone: `+258${normalizedPhone}`, role: "client" });
     if (error) { await db.auth.admin.deleteUser(created.data.user.id); throw error; }
     return Response.json({ ok: true });
   } catch { return Response.json({ error: "Não foi possível criar a conta. Tente novamente." }, { status: 500 }); }
