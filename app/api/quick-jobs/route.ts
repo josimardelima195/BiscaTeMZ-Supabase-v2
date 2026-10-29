@@ -2,20 +2,22 @@ import { adminSupabase, currentUser } from "@/lib/supabase-server";
 
 export async function GET() {
   const db = adminSupabase();
-  const { data, error } = await db.from("quick_jobs").select("id,owner_id,title,details,category,budget,currency,mode,location,preferred_at,status,created_at,expires_at").eq("status", "open").order("created_at", { ascending: false }).limit(60);
+  const { data, error } = await db.from("quick_jobs").select("id,owner_id,title,details,category,budget,currency,mode,location,preferred_at,status,created_at,expires_at,photo_path").eq("status", "open").order("created_at", { ascending: false }).limit(60);
   if (error) return Response.json({ error: "Não foi possível carregar os trabalhos rápidos." }, { status: 500 });
   const now = Date.now();
   const visible = (data ?? []).filter((job: any) => !job.expires_at || new Date(job.expires_at).getTime() > now);
   const ownerIds = [...new Set(visible.map((job: any) => job.owner_id).filter(Boolean))];
   const owners = ownerIds.length ? await db.from("profiles").select("id,full_name,photo_url,city").in("id", ownerIds) : { data: [] as any[] };
   const ownerMap = new Map((owners.data ?? []).map((owner: any) => [owner.id, owner]));
-  return Response.json({ jobs: visible.map((job: any) => ({ ...job, owner: ownerMap.get(job.owner_id) ?? null })) });
+  return Response.json({ jobs: visible.map((job: any) => ({ ...job, photo_url: job.photo_path ? db.storage.from("quick-job-photos").getPublicUrl(job.photo_path).data.publicUrl : null, owner: ownerMap.get(job.owner_id) ?? null })) });
 }
 
 export async function POST(request: Request) {
   const user = await currentUser(request);
   if (!user) return Response.json({ error: "Entre na sua conta para lançar um trabalho rápido." }, { status: 401 });
-  const body = await request.json().catch(() => ({}));
+  const contentType = request.headers.get("content-type") ?? "";
+  const form = contentType.includes("multipart/form-data") ? await request.formData() : null;
+  const body: Record<string, FormDataEntryValue | string> = form ? Object.fromEntries(form.entries()) : await request.json().catch(() => ({}));
   const title = String(body.title ?? "").trim();
   const details = String(body.details ?? "").trim();
   const category = String(body.category ?? "Outro").trim().slice(0, 80) || "Outro";
@@ -28,7 +30,16 @@ export async function POST(request: Request) {
   const preferredAt = body.preferredAt ? new Date(String(body.preferredAt)).toISOString() : null;
   if (body.preferredAt && Number.isNaN(new Date(String(body.preferredAt)).getTime())) return Response.json({ error: "Indique uma data ou horário válido." }, { status: 400 });
   const db = adminSupabase();
-  const { data, error } = await db.from("quick_jobs").insert({ owner_id: user.id, title, details, category, budget, mode, location, preferred_at: preferredAt, expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }).select("id,title,details,category,budget,currency,mode,location,preferred_at,status,created_at,expires_at").single();
+  let photo_path: string | null = null;
+  const photo = form?.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    if (!photo.type.startsWith("image/") || photo.size > 8 * 1024 * 1024) return Response.json({ error: "A fotografia deve ser JPG, PNG ou WebP e ter até 8 MB." }, { status: 400 });
+    const ext = (photo.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    photo_path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const uploaded = await db.storage.from("quick-job-photos").upload(photo_path, Buffer.from(await photo.arrayBuffer()), { contentType: photo.type, upsert: false });
+    if (uploaded.error) return Response.json({ error: "Não foi possível guardar a fotografia." }, { status: 500 });
+  }
+  const { data, error } = await db.from("quick_jobs").insert({ owner_id: user.id, title, details, category, budget, mode, location, preferred_at: preferredAt, photo_path, expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }).select("id,title,details,category,budget,currency,mode,location,preferred_at,status,created_at,expires_at,photo_path").single();
   if (error) return Response.json({ error: "Não foi possível publicar o trabalho rápido." }, { status: 500 });
-  return Response.json({ job: { ...data, owner_id: user.id }, message: "Trabalho rápido publicado para a comunidade." }, { status: 201 });
+  return Response.json({ job: { ...data, owner_id: user.id, photo_url: photo_path ? db.storage.from("quick-job-photos").getPublicUrl(photo_path).data.publicUrl : null }, message: "Trabalho rápido publicado para a comunidade." }, { status: 201 });
 }

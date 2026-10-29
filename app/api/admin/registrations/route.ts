@@ -4,7 +4,7 @@ async function admin(request: Request) { const u = await currentUser(request); i
 
 export async function GET(request: Request) {
   if (!await admin(request)) return Response.json({ error: "Acesso administrativo recusado." }, { status: 403 });
-  const db = adminSupabase(); const providers = await db.from("provider_profiles").select("*").order("updated_at", { ascending: false });
+  const db = adminSupabase(); const providers = await db.from("provider_profiles").select("*").is("deactivated_at", null).order("updated_at", { ascending: false });
   if (providers.error) return Response.json({ error: "Não foi possível consultar os perfis de prestador." }, { status: 500 });
   const ids = (providers.data ?? []).map(row => row.id); if (!ids.length) return Response.json({ registrations: [] });
   const [profiles, documents] = await Promise.all([db.from("profiles").select("id,full_name,phone,photo_url").in("id", ids), db.from("provider_documents").select("*").in("provider_id", ids).order("created_at", { ascending: false })]);
@@ -28,7 +28,14 @@ export async function DELETE(request: Request) {
   const user = await admin(request); if (!user) return Response.json({ error: "Acesso administrativo recusado." }, { status: 403 });
   const body = await request.json().catch(() => ({})); const id = String(body.id ?? ""); if (!id || id === user.id) return Response.json({ error: "Não pode remover a própria conta administrativa." }, { status: 400 });
   const db = adminSupabase(); const { data: provider } = await db.from("provider_profiles").select("id").eq("id", id).maybeSingle(); if (!provider) return Response.json({ error: "Prestador não encontrado." }, { status: 404 });
-  const { count: requestCount } = await db.from("service_requests").select("id", { count: "exact", head: true }).or(`client_id.eq.${id},provider_id.eq.${id}`); if ((requestCount ?? 0) > 0) return Response.json({ error: "Este prestador já tem pedidos ou histórico. Para proteger os registos, desative-o em vez de apagar a conta." }, { status: 409 });
+  const { count: requestCount } = await db.from("service_requests").select("id", { count: "exact", head: true }).or(`client_id.eq.${id},provider_id.eq.${id}`);
+  if ((requestCount ?? 0) > 0) {
+    const archived = await db.from("provider_profiles").update({ verification: "rejected", available: false, deactivated_at: new Date().toISOString() }).eq("id", id);
+    if (archived.error) return Response.json({ error: "Não foi possível desactivar a conta." }, { status: 500 });
+    await db.from("notifications").insert({ user_id: id, title: "Conta removida", body: "O seu perfil foi removido da pesquisa pública pela administração.", href: "/" });
+    await db.from("admin_access_logs").insert({ admin_id: user.id, resource_type: "provider", resource_id: id, action: "deactivate_account_with_history" });
+    return Response.json({ ok: true, mode: "deactivated", message: "Conta removida da plataforma pública; o histórico foi preservado." });
+  }
   const docs = await db.from("provider_documents").select("storage_path").eq("provider_id", id); if (docs.data?.length) await db.storage.from("private-documents").remove(docs.data.map(x => x.storage_path));
   const portfolio = await db.from("provider_portfolio").select("storage_path").eq("provider_id", id); if (portfolio.data?.length) await db.storage.from("provider-portfolio").remove(portfolio.data.map(x => x.storage_path));
   const deleted = await db.auth.admin.deleteUser(id); if (deleted.error) return Response.json({ error: "Não foi possível remover a conta. " + deleted.error.message }, { status: 500 });
